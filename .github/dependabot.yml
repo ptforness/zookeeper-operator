@@ -1,0 +1,128 @@
+# To get started with Dependabot version updates, you'll need to specify which
+# package ecosystems to update and where the package manifests are located.
+# Please see the documentation for all configuration options:
+# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+# cooldown: wait a week after a release before proposing it, so a compromised
+# or quickly-yanked version is less likely to be picked up.
+updates:
+  # GitHub Actions dependencies (grouped into single PR)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      github-actions-dependencies:
+        patterns:
+          - "*"
+
+  # Docker base images (grouped into single PR)
+  # Every directory containing a Dockerfile must be listed explicitly:
+  # Dependabot does not search subdirectories.
+  #
+  # docker/Dockerfile takes its Apache ZooKeeper base image from the
+  # BASE_IMAGE build arg (built from docker/zookeeper-image in the same
+  # release job), so there is no base image tag for Dependabot to bump there.
+  - package-ecosystem: "docker"
+    directories:
+      - "/"
+      - "/build"
+      - "/docker"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "09:00"
+      timezone: "UTC"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      docker-dependencies:
+        patterns:
+          - "*"
+
+  # The Apache ZooKeeper server version itself is managed manually. It is the
+  # tarball downloaded by ARG ZK_VERSION in docker/zookeeper-image/Dockerfile,
+  # which Dependabot cannot see. To bump it: update ARG ZK_VERSION, publish a
+  # GitHub release (the release job rebuilds the base image and the final
+  # zookeeper image together), then update DefaultZkContainerVersion.
+  # Only the debian base image is automated here.
+  - package-ecosystem: "docker"
+    directory: "/docker/zookeeper-image"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "09:00"
+      timezone: "UTC"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    ignore:
+      - dependency-name: "*zookeeper*"
+    groups:
+      zookeeper-image-dependencies:
+        patterns:
+          - "*"
+
+  # Gradle dependencies for the "zu" helper tool (grouped into single PR)
+  - package-ecosystem: "gradle"
+    directory: "/docker/zu"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+      time: "09:00"
+      timezone: "UTC"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    ignore:
+      # See the note above: the ZooKeeper version is managed manually.
+      - dependency-name: "org.apache.zookeeper:*"
+    groups:
+      gradle-dependencies:
+        patterns:
+          - "*"
+
+
+  # =============================================================================
+  # GO MODULES CONFIGURATION WITH GROUPING
+  # =============================================================================
+  # Grouping combines all Go module updates into a single PR.
+  # Groups apply per package-ecosystem entry.
+  #
+  # Current go.mod files detected:
+  # - / (root)
+  # =============================================================================
+
+  # Main Go modules (grouped into single PR)
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "09:00"
+      timezone: "UTC"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      main-go-dependencies:
+        patterns:
+          - "*"

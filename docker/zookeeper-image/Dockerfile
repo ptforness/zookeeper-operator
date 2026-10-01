@@ -1,5 +1,5 @@
 # backported from https://github.com/docker-library/openjdk/blob/4c2b1a57869e24c5fcfbea6a17e558c710d4f6bd/21/jdk/slim-bullseye/Dockerfile
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 
 RUN set -eux; \
 	apt-get update; \
@@ -8,12 +8,12 @@ RUN set -eux; \
 	; \
 	rm -rf /var/lib/apt/lists/*
 
-ENV JAVA_HOME /usr/local/openjdk-21
-ENV PATH $JAVA_HOME/bin:$PATH
+ENV JAVA_HOME=/usr/local/openjdk-21
+ENV PATH=$JAVA_HOME/bin:$PATH
 
 # Default to UTF-8 file.encoding
-ENV LANG C.UTF-8
-ENV JAVA_VERSION 21
+ENV LANG=C.UTF-8
+ENV JAVA_VERSION=21
 
 RUN set -eux; \
 	\
@@ -109,14 +109,17 @@ RUN set -eux; \
         dirmngr \
         gosu \
         gnupg \
-        netcat \
+        netcat-openbsd \
         wget; \
     rm -rf /var/lib/apt/lists/*; \
 # Verify that gosu binary works
     gosu nobody true
 
-ARG SHORT_DISTRO_NAME=zookeeper-3.8.4
-ARG DISTRO_NAME=apache-zookeeper-3.8.4-bin
+# Single source of truth for the Apache ZooKeeper version. Everything else in
+# this file, and the image tags in .github/workflows/release.yml, derive from it.
+ARG ZK_VERSION=3.9.6
+ARG SHORT_DISTRO_NAME=zookeeper-${ZK_VERSION}
+ARG DISTRO_NAME=apache-zookeeper-${ZK_VERSION}-bin
 
 # Download Apache Zookeeper, verify its PGP signature, untar and clean up
 RUN set -eux; \
@@ -148,9 +151,9 @@ RUN set -eux; \
     mv "$DISTRO_NAME/conf/"* "$ZOO_CONF_DIR"; \
     rm -rf "$GNUPGHOME" "KEYS" "$DISTRO_NAME.tar.gz" "$DISTRO_NAME.tar.gz.asc" "$DISTRO_NAME/docs"; \
     chown -R zookeeper:zookeeper "/$DISTRO_NAME"
-COPY opt/zkEnv.sh  $DISTRO_NAME/bin/zkEnv.sh
+COPY opt/zkEnv.sh /$DISTRO_NAME/bin/zkEnv.sh
 
-WORKDIR $DISTRO_NAME
+WORKDIR /$DISTRO_NAME
 VOLUME ["$ZOO_DATA_DIR", "$ZOO_DATA_LOG_DIR", "$ZOO_LOG_DIR"]
 
 EXPOSE 2181 2888 3888 8080
@@ -160,13 +163,13 @@ ENV PATH=$PATH:/$DISTRO_NAME/bin \
 
 # OCI standard labels
 LABEL org.opencontainers.image.title="Apache Zookeeper"
-LABEL org.opencontainers.image.description="Apache Zookeeper 3.8.4 with OpenJDK 21"
+LABEL org.opencontainers.image.description="Apache Zookeeper ${ZK_VERSION} with OpenJDK 21"
 LABEL org.opencontainers.image.source="https://github.com/adobe/zookeeper-operator"
 LABEL org.opencontainers.image.url="https://github.com/adobe/zookeeper-operator"
 LABEL org.opencontainers.image.documentation="https://github.com/adobe/zookeeper-operator"
 LABEL org.opencontainers.image.vendor="Adobe"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
-LABEL org.opencontainers.image.version="3.8.4"
+LABEL org.opencontainers.image.version="${ZK_VERSION}"
 
 COPY docker-entrypoint.sh /
 ENTRYPOINT ["/docker-entrypoint.sh"]

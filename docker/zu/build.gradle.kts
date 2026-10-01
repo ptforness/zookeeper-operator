@@ -1,9 +1,10 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    kotlin("jvm") version "1.9.21"
-    id("com.github.johnrengelman.shadow") version "8.1.1"
+    kotlin("jvm") version "2.4.20"
+    id("com.gradleup.shadow") version "9.6.1"
 }
 
 repositories {
@@ -17,7 +18,7 @@ java {
 
 dependencies {
     implementation(kotlin("stdlib"))
-    implementation("org.apache.zookeeper:zookeeper:3.9.3")
+    implementation("org.apache.zookeeper:zookeeper:3.9.6")
 }
 
 tasks.withType<ShadowJar>() {
@@ -28,7 +29,7 @@ tasks.withType<ShadowJar>() {
 }
 
 tasks.withType<KotlinCompile> {
-  kotlinOptions {
-    jvmTarget = "21"
+  compilerOptions {
+    jvmTarget.set(JvmTarget.JVM_21)
   }
 }

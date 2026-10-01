@@ -13,13 +13,21 @@ CRD_OPTIONS ?= "crd:crdVersions=v1,generateEmbeddedObjectMeta=true"
 PROJECT_NAME=zookeeper-operator
 EXPORTER_NAME=zookeeper-exporter
 APP_NAME=zookeeper
-REPO=pravega/$(PROJECT_NAME)
+REPO?=adobe/$(PROJECT_NAME)
 TEST_REPO=testzkop/$(PROJECT_NAME)
-APP_REPO=pravega/$(APP_NAME)
-ALTREPO=emccorp/$(PROJECT_NAME)
-APP_ALTREPO=emccorp/$(APP_NAME)
+APP_REPO?=adobe/$(APP_NAME)
+# Go module path (still github.com/pravega/...), used for the -X ldflags.
+# Kept separate from REPO, which is only the Docker image name.
+MODULE=$(shell awk '/^module /{print $$2}' go.mod)
 VERSION=$(shell git describe --always --tags --dirty | tr -d "v" | sed "s/\(.*\)-g`git rev-parse --short HEAD`/\1/")
 GIT_SHA=$(shell git rev-parse --short HEAD)
+# Single source of truth for the operator's builder image Go version: read the
+# `go` directive from go.mod so it never drifts from what the module requires.
+# Single source of truth for the operator's builder image Go version: read the
+# `go` directive from go.mod so it never drifts from what the module requires.
+# Trimmed to major.minor since Docker Hub's golang image only ships
+# X.Y-alpineN (floating patch) tags, not go.mod's full X.Y.Z patch version.
+GO_VERSION=$(shell awk '/^go /{print $$2}' go.mod | cut -d. -f1,2)
 TEST_IMAGE=$(TEST_REPO)-testimages:$(VERSION)
 DOCKER_TEST_PASS=testzkop@123
 DOCKER_TEST_USER=testzkop
@@ -33,8 +41,10 @@ GOBIN=$(shell go env GOBIN)
 endif
 
 # Install CRDs into a cluster
+# Server-side apply: the CRD exceeds the 256KiB last-applied-configuration
+# annotation limit of client-side apply.
 install: manifests kustomize
-	$(KUSTOMIZE) build config/crd | kubectl apply -f -
+	$(KUSTOMIZE) build config/crd | kubectl apply --server-side -f -
 
 # Uninstall CRDs from a cluster
 uninstall: manifests kustomize
@@ -51,18 +61,16 @@ manifests: controller-gen
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests kustomize
 	cd config/manager && $(KUSTOMIZE) edit set image pravega/zookeeper-operator=$(TEST_IMAGE)
-	$(KUSTOMIZE) build config/default | kubectl apply -f -
+	$(KUSTOMIZE) build config/default | kubectl apply --server-side -f -
 
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy-test: manifests kustomize
-	cd config/test
-	$(KUSTOMIZE) build config/test | kubectl apply -f -
+	$(KUSTOMIZE) build config/test | kubectl apply --server-side -f -
 
 # Undeploy controller in the configured Kubernetes cluster in ~/.kube/config
 undeploy-test: manifests kustomize
-	cd config/test
-	$(KUSTOMIZE) build config/test | kubectl apply -f -
+	$(KUSTOMIZE) build config/test | kubectl delete --ignore-not-found -f -
 
 # Undeploy controller in the configured Kubernetes cluster in ~/.kube/config
 undeploy:
@@ -112,32 +120,32 @@ build: test build-go build-image
 
 build-go:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-		-ldflags "-X github.com/$(REPO)/pkg/version.Version=$(VERSION) -X github.com/$(REPO)/pkg/version.GitSHA=$(GIT_SHA)" \
+		-ldflags "-X $(MODULE)/pkg/version.Version=$(VERSION) -X $(MODULE)/pkg/version.GitSHA=$(GIT_SHA)" \
 		-o bin/$(PROJECT_NAME)-linux-amd64 main.go
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-		-ldflags "-X github.com/$(REPO)/pkg/version.Version=$(VERSION) -X github.com/$(REPO)/pkg/version.GitSHA=$(GIT_SHA)" \
+		-ldflags "-X $(MODULE)/pkg/version.Version=$(VERSION) -X $(MODULE)/pkg/version.GitSHA=$(GIT_SHA)" \
 		-o bin/$(EXPORTER_NAME)-linux-amd64 cmd/exporter/main.go
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
-		-ldflags "-X github.com/$(REPO)/pkg/version.Version=$(VERSION) -X github.com/$(REPO)/pkg/version.GitSHA=$(GIT_SHA)" \
+		-ldflags "-X $(MODULE)/pkg/version.Version=$(VERSION) -X $(MODULE)/pkg/version.GitSHA=$(GIT_SHA)" \
 		-o bin/$(PROJECT_NAME)-linux-arm64 main.go
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
-		-ldflags "-X github.com/$(REPO)/pkg/version.Version=$(VERSION) -X github.com/$(REPO)/pkg/version.GitSHA=$(GIT_SHA)" \
+		-ldflags "-X $(MODULE)/pkg/version.Version=$(VERSION) -X $(MODULE)/pkg/version.GitSHA=$(GIT_SHA)" \
 		-o bin/$(EXPORTER_NAME)-linux-arm64 cmd/exporter/main.go
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build \
-		-ldflags "-X github.com/$(REPO)/pkg/version.Version=$(VERSION) -X github.com/$(REPO)/pkg/version.GitSHA=$(GIT_SHA)" \
+		-ldflags "-X $(MODULE)/pkg/version.Version=$(VERSION) -X $(MODULE)/pkg/version.GitSHA=$(GIT_SHA)" \
 		-o bin/$(PROJECT_NAME)-darwin-amd64 main.go
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build \
-		-ldflags "-X github.com/$(REPO)/pkg/version.Version=$(VERSION) -X github.com/$(REPO)/pkg/version.GitSHA=$(GIT_SHA)" \
+		-ldflags "-X $(MODULE)/pkg/version.Version=$(VERSION) -X $(MODULE)/pkg/version.GitSHA=$(GIT_SHA)" \
 		-o bin/$(EXPORTER_NAME)-darwin-amd64 cmd/exporter/main.go
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
-		-ldflags "-X github.com/$(REPO)/pkg/version.Version=$(VERSION) -X github.com/$(REPO)/pkg/version.GitSHA=$(GIT_SHA)" \
+		-ldflags "-X $(MODULE)/pkg/version.Version=$(VERSION) -X $(MODULE)/pkg/version.GitSHA=$(GIT_SHA)" \
 		-o bin/$(PROJECT_NAME)-windows-amd64.exe main.go
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
-		-ldflags "-X github.com/$(REPO)/pkg/version.Version=$(VERSION) -X github.com/$(REPO)/pkg/version.GitSHA=$(GIT_SHA)" \
+		-ldflags "-X $(MODULE)/pkg/version.Version=$(VERSION) -X $(MODULE)/pkg/version.GitSHA=$(GIT_SHA)" \
 		-o bin/$(EXPORTER_NAME)-windows-amd64.exe cmd/exporter/main.go
 
 build-image:
-	docker build --build-arg VERSION=$(VERSION) --build-arg DOCKER_REGISTRY=$(DOCKER_REGISTRY) --build-arg DISTROLESS_DOCKER_REGISTRY=$(DISTROLESS_DOCKER_REGISTRY) --build-arg GIT_SHA=$(GIT_SHA) -t $(REPO):$(VERSION) .
+	docker build --build-arg VERSION=$(VERSION) --build-arg GIT_SHA=$(GIT_SHA) --build-arg GO_VERSION=$(GO_VERSION) -t $(REPO):$(VERSION) .
 	docker tag $(REPO):$(VERSION) $(REPO):latest
 
 # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
@@ -149,15 +157,17 @@ build-image:
 PLATFORMS ?= linux/arm64,linux/amd64
 .PHONY: docker-buildx
 docker-buildx: ## Build and push docker image for the manager for cross-platform support
+	# The Dockerfile cross-compiles natively using BUILDPLATFORM + TARGETOS/TARGETARCH, so it is built directly.
 	- docker buildx create --name zookeeper-builder
 	docker buildx use zookeeper-builder
 	docker buildx build --push --platform=$(PLATFORMS) --tag $(IMG) \
-		--build-arg VERSION=$(VERSION) --build-arg GIT_SHA=$(GIT_SHA) -f Dockerfile .
+		--build-arg VERSION=$(VERSION) --build-arg GIT_SHA=$(GIT_SHA) --build-arg GO_VERSION=$(GO_VERSION) .
 	- docker buildx rm zookeeper-builder
 
 build-zk-image:
-
-	docker build --build-arg VERSION=$(VERSION)  --build-arg DOCKER_REGISTRY=$(DOCKER_REGISTRY) --build-arg GIT_SHA=$(GIT_SHA) -t $(APP_REPO):$(VERSION) ./docker
+	docker build -t $(APP_REPO):$(VERSION)-apache ./docker/zookeeper-image
+	docker build --build-arg VERSION=$(VERSION)  --build-arg DOCKER_REGISTRY=$(DOCKER_REGISTRY) --build-arg GIT_SHA=$(GIT_SHA) \
+		--build-arg BASE_IMAGE=$(APP_REPO):$(VERSION)-apache -t $(APP_REPO):$(VERSION) ./docker
 	docker tag $(APP_REPO):$(VERSION) $(APP_REPO):latest
 
 build-zk-image-swarm:
@@ -196,14 +206,6 @@ push: build-image build-zk-image login
 	docker push $(REPO):latest
 	docker push $(APP_REPO):$(VERSION)
 	docker push $(APP_REPO):latest
-	docker tag $(REPO):$(VERSION) $(ALTREPO):$(VERSION)
-	docker tag $(REPO):$(VERSION) $(ALTREPO):latest
-	docker tag $(APP_REPO):$(VERSION) $(APP_ALTREPO):$(VERSION)
-	docker tag $(APP_REPO):$(VERSION) $(APP_ALTREPO):latest
-	docker push $(ALTREPO):$(VERSION)
-	docker push $(ALTREPO):latest
-	docker push $(APP_ALTREPO):$(VERSION)
-	docker push $(APP_ALTREPO):latest
 
 clean:
 	rm -f bin/$(PROJECT_NAME)
